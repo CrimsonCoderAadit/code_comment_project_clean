@@ -4,7 +4,7 @@ import ast
 import pandas as pd
 import networkx as nx
 
-DATA_FILE = "data/Code_comment_Seed_Data.csv"   # adjust if your CSV has a different name
+DATA_FILE = "data/Code_Comment_Seed_Data.csv"   # adjust if your CSV has a different name
 OUT_DIR = "data/graphs"
 
 def parse_code_to_ast_nodes(code, G, parent=None):
