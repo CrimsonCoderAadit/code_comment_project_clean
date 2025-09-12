@@ -1,8 +1,9 @@
 import os
+import glob
 import torch
-import networkx as nx
+from torch_geometric.data import InMemoryDataset, Data
 from torch_geometric.utils import from_networkx
-from torch_geometric.data import InMemoryDataset
+import networkx as nx
 
 class CodeCommentGraphDataset(InMemoryDataset):
     def __init__(self, root, transform=None, pre_transform=None):
@@ -11,30 +12,39 @@ class CodeCommentGraphDataset(InMemoryDataset):
 
     @property
     def raw_file_names(self):
-        return []  # not used, we directly read .gpickle
+        return []  # we already have gpickles
 
     @property
     def processed_file_names(self):
         return ["data.pt"]
 
+    def download(self):
+        # Nothing to download
+        pass
+
     def process(self):
         data_list = []
-        graph_dir = os.path.join(self.root, "graphs")
+        graph_files = glob.glob(os.path.join(self.root, "graphs", "*.gpickle"))
 
-        for fname in os.listdir(graph_dir):
-            if fname.endswith(".gpickle"):
-                G = nx.read_gpickle(os.path.join(graph_dir, fname))
-                
-                # Convert to PyG Data object
-                data = from_networkx(G)
+        for gf in graph_files:
+            G = nx.read_gpickle(gf)
 
-                # Graph label from filename (Useful or NotUseful)
-                if "Useful" in fname:
-                    data.y = torch.tensor([1], dtype=torch.long)
-                else:
-                    data.y = torch.tensor([0], dtype=torch.long)
+            # 🔑 Ensure all nodes have "type" and "text"
+            for n, d in G.nodes(data=True):
+                if "type" not in d:
+                    d["type"] = "unknown"
+                if "text" not in d:
+                    d["text"] = ""
 
-                data_list.append(data)
+            data = from_networkx(G)
+
+            # Extract label from filename
+            if "Useful" in gf:
+                data.y = torch.tensor([1], dtype=torch.long)
+            else:
+                data.y = torch.tensor([0], dtype=torch.long)
+
+            data_list.append(data)
 
         data, slices = self.collate(data_list)
         torch.save((data, slices), self.processed_paths[0])
