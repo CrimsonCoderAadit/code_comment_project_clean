@@ -5,52 +5,51 @@ Ensures all graphs have consistent node features and labels.
 
 import os
 import torch
-import networkx as nx
-from torch_geometric.data import Data, InMemoryDataset
-from torch_geometric.utils import from_networkx
+from torch_geometric.data import InMemoryDataset
 from tqdm import tqdm
 
 GRAPH_DIR = "data/graphs"
+
 
 class CodeCommentGraphDataset(InMemoryDataset):
     def __init__(self, root, transform=None, pre_transform=None):
         self.root = root
         super().__init__(root, transform, pre_transform)
+        # Load processed dataset
         self.data, self.slices = torch.load(self.processed_paths[0], weights_only=False)
 
     @property
     def raw_file_names(self):
-        return []  # not used
+        # No raw files needed (we already built graphs separately)
+        return []
 
     @property
     def processed_file_names(self):
         return ["data.pt"]
 
     def download(self):
-        # No downloading step
+        # No downloading required
         pass
 
     def process(self):
         print(f"Processing graphs from: {GRAPH_DIR}")
-        files = [f for f in os.listdir(GRAPH_DIR) if f.endswith(".gpickle")]
+        files = [f for f in os.listdir(GRAPH_DIR) if f.endswith(".pt")]
         print(f"Found {len(files)} graphs to process...")
 
         data_list = []
-        for f in tqdm(files):
+        for f in tqdm(files, desc="Loading graphs"):
             try:
-                G = nx.read_gpickle(os.path.join(GRAPH_DIR, f))
-                data = from_networkx(G)
+                data = torch.load(os.path.join(GRAPH_DIR, f), weights_only=False)
 
                 # Ensure x exists and is numeric
                 if not hasattr(data, "x") or data.x is None:
                     continue
-                data.x = torch.tensor(data.x, dtype=torch.float)
+                data.x = torch.as_tensor(data.x, dtype=torch.float)
 
                 # Ensure y exists
-                y = G.graph.get("y", None)
-                if y is None:
+                if not hasattr(data, "y") or data.y is None:
                     continue
-                data.y = torch.tensor([int(y)], dtype=torch.long)
+                data.y = torch.as_tensor(data.y, dtype=torch.long)
 
                 data_list.append(data)
             except Exception as e:

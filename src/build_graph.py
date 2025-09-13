@@ -1,59 +1,102 @@
-"""
-Builds graph objects from raw CSVs and saves them as NetworkX gpickle files.
-Each node has numeric features and each graph has a label (0 or 1).
-"""
-
 import os
 import pandas as pd
 import networkx as nx
+import torch
+from torch_geometric.data import Data
 from tqdm import tqdm
 
-RAW_DATA = "data/raw/data.csv"
-GRAPH_DIR = "data/graphs"
-
-def ensure_dir(path):
-    """Ensure directory exists."""
-    if not os.path.exists(path):
-        os.makedirs(path)
-
-def build_graph_from_row(code: str, comment: str, label: int, idx: int):
-    """
-    Build a toy graph:
-    - Two nodes (code, comment)
-    - Edge between them
-    - Features: node length
-    - Label: provided from dataset
-    """
-    G = nx.Graph()
+# ------------------------------
+# Safe label conversion
+# ------------------------------
+def safe_label(label):
+    """Convert labels to integers safely."""
+    if pd.isna(label):
+        return None
+    label_str = str(label).strip().lower()
+    mapping = {
+        "not useful": 0,
+        "useful": 1
+    }
+    if label_str in mapping:
+        return mapping[label_str]
     try:
-        G.add_node(0, x=[len(code)], type="code")
-        G.add_node(1, x=[len(comment)], type="comment")
-        G.add_edge(0, 1)
-
-        # Graph-level label
-        G.graph["y"] = int(label)
-        return G
-    except Exception as e:
-        print(f"⚠️ Skipping row {idx}: {e}")
+        return int(label)  # fallback if numeric
+    except Exception:
         return None
 
+# ------------------------------
+# Graph builder (toy example)
+# ------------------------------
+def build_graph(code, comment, label):
+    """
+    Convert code + comment into a graph.
+    Right now we just build a simple graph:
+    - Nodes = characters of code
+    - Comment stored in graph metadata
+    """
+    if not isinstance(code, str) or not isinstance(comment, str):
+        return None
+
+    # Example: char-level graph (you can swap with AST parser later)
+    G = nx.path_graph(len(code))
+    x = torch.ones((G.number_of_nodes(), 1))  # feature: all 1s
+
+    # Make PyG Data object
+    edge_index = torch.tensor(list(G.edges)).t().contiguous()
+    if edge_index.numel() == 0:
+        return None
+
+    data = Data(
+        x=x,
+        edge_index=edge_index,
+        y=torch.tensor([label], dtype=torch.long),
+    )
+    return data
+
+# ------------------------------
+# Main function
+# ------------------------------
 def main():
-    ensure_dir(GRAPH_DIR)
-    df = pd.read_csv(RAW_DATA)
+    input_csv = "data/raw/data.csv"
+    output_dir = "data/graphs"
+    os.makedirs(output_dir, exist_ok=True)
 
-    print(f"Processing {len(df)} examples...")
+    print(f"📂 Loading dataset: {input_csv}")
+    df = pd.read_csv(input_csv)
+
+    # Rename columns consistently
+    df = df.rename(columns={
+        "Comments": "comment",
+        "Surrounding Code Context": "code",
+        "Class": "label"
+    })
+
+    print(f"📊 Total rows: {len(df)}")
+
+    skipped = 0
     saved = 0
-    for idx, row in tqdm(df.iterrows(), total=len(df)):
-        code = str(row.get("code", ""))
-        comment = str(row.get("comment", ""))
-        label = int(row.get("label", 0))
 
-        G = build_graph_from_row(code, comment, label, idx)
-        if G is not None:
-            out_file = os.path.join(GRAPH_DIR, f"graph_{idx}.gpickle")
-            nx.write_gpickle(G, out_file)
-            saved += 1
-    print(f"✅ Saved {saved} graphs to {GRAPH_DIR}")
+    for i, row in tqdm(df.iterrows(), total=len(df)):
+        label = safe_label(row["label"])
+
+        # ✅ FIXED: only skip when label is None
+        if label is None:
+            print(f"⚠️ Skipping row {i}: Invalid label: {row['label']}")
+            skipped += 1
+            continue
+
+        graph = build_graph(row["code"], row["comment"], label)
+        if graph is None:
+            print(f"⚠️ Skipping row {i}: Could not build graph")
+            skipped += 1
+            continue
+
+        # Save graph
+        torch.save(graph, os.path.join(output_dir, f"graph_{i}.pt"))
+        saved += 1
+
+    print(f"\n✅ Finished! Saved {saved} graphs to {output_dir}")
+    print(f"⚠️ Skipped: {skipped} rows out of {len(df)}")
 
 if __name__ == "__main__":
     main()
