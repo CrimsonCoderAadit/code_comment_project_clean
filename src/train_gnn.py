@@ -1,46 +1,67 @@
+"""
+Training script for GNN model on code-comment graphs.
+"""
+
 import torch
 from torch_geometric.loader import DataLoader
-from sklearn.model_selection import train_test_split
 from gnn_dataset import CodeCommentGraphDataset
-from gnn_model import GCNClassifier
+from gnn_model import GNNModel
+import torch.nn.functional as F
 
 def train():
-    dataset = CodeCommentGraphDataset(root="data")
-    train_idx, test_idx = train_test_split(range(len(dataset)), test_size=0.2, random_state=42)
-
-    train_dataset = dataset[train_idx]
-    test_dataset = dataset[test_idx]
-
-    train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
-    test_loader = DataLoader(test_dataset, batch_size=32)
-
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model = GCNClassifier(input_dim=1, hidden_dim=64, num_classes=2).to(device)
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
 
-    for epoch in range(1, 21):
+    print("Processing...")
+    dataset = CodeCommentGraphDataset(root="data")
+    print("✅ Dataset loaded!")
+
+    # Train/test split
+    torch.manual_seed(42)
+    dataset = dataset.shuffle()
+    train_dataset = dataset[:int(0.8 * len(dataset))]
+    test_dataset = dataset[int(0.8 * len(dataset)):]
+
+    train_loader = DataLoader(train_dataset, batch_size=64, shuffle=True)
+    test_loader = DataLoader(test_dataset, batch_size=64, shuffle=False)
+
+    # Model
+    input_dim = dataset.num_node_features
+    num_classes = len(torch.unique(dataset.data.y))
+    print(f"Input dim: {input_dim}, Num classes: {num_classes}")
+
+    model = GNNModel(input_dim=input_dim, hidden_dim=64, num_classes=num_classes).to(device)
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+    loss_fn = torch.nn.CrossEntropyLoss()
+
+    # Training loop
+    for epoch in range(1, 6):
         model.train()
         total_loss = 0
         for batch in train_loader:
             batch = batch.to(device)
             optimizer.zero_grad()
             out = model(batch.x.float(), batch.edge_index, batch.batch)
-            loss = torch.nn.functional.nll_loss(out, batch.y)
+            loss = loss_fn(out, batch.y)
             loss.backward()
             optimizer.step()
             total_loss += loss.item()
-        print(f"Epoch {epoch}, Loss {total_loss:.4f}")
+        print(f"Epoch {epoch}, Loss: {total_loss:.4f}")
 
-    # Evaluate
+        # Evaluation each epoch
+        acc = evaluate(model, test_loader, device)
+        print(f"Validation Accuracy after epoch {epoch}: {acc:.4f}")
+
+def evaluate(model, loader, device):
     model.eval()
-    correct = 0
-    for batch in test_loader:
-        batch = batch.to(device)
-        out = model(batch.x.float(), batch.edge_index, batch.batch)
-        pred = out.argmax(dim=1)
-        correct += int((pred == batch.y).sum())
-    acc = correct / len(test_dataset)
-    print(f"Test Accuracy: {acc:.4f}")
+    correct, total = 0, 0
+    with torch.no_grad():
+        for batch in loader:
+            batch = batch.to(device)
+            out = model(batch.x.float(), batch.edge_index, batch.batch)
+            pred = out.argmax(dim=1)
+            correct += (pred == batch.y).sum().item()
+            total += batch.y.size(0)
+    return correct / total if total > 0 else 0.0
 
 if __name__ == "__main__":
     train()

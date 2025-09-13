@@ -1,46 +1,59 @@
+"""
+Builds graph objects from raw CSVs and saves them as NetworkX gpickle files.
+Each node has numeric features and each graph has a label (0 or 1).
+"""
+
 import os
 import pandas as pd
 import networkx as nx
+from tqdm import tqdm
 
-def build_graphs(input_file, out_dir):
-    os.makedirs(out_dir, exist_ok=True)
-    df = pd.read_csv(input_file)
+RAW_DATA = "data/raw/data.csv"
+GRAPH_DIR = "data/graphs"
 
-    for i, row in df.iterrows():
-        comment = row.get("Comments", "")
-        code = row.get("Surrounding Code Context", "")
-        label = row.get("Class", "Unknown")
+def ensure_dir(path):
+    """Ensure directory exists."""
+    if not os.path.exists(path):
+        os.makedirs(path)
 
-        G = nx.DiGraph()
+def build_graph_from_row(code: str, comment: str, label: int, idx: int):
+    """
+    Build a toy graph:
+    - Two nodes (code, comment)
+    - Edge between them
+    - Features: node length
+    - Label: provided from dataset
+    """
+    G = nx.Graph()
+    try:
+        G.add_node(0, x=[len(code)], type="code")
+        G.add_node(1, x=[len(comment)], type="comment")
+        G.add_edge(0, 1)
 
-        # 🔑 Add consistent node attributes
-        G.add_node(
-            f"comment_{i}",
-            type="comment",
-            text=str(comment) if pd.notna(comment) else ""
-        )
-        G.add_node(
-            f"code_{i}",
-            type="code",
-            text=str(code) if pd.notna(code) else ""
-        )
-
-        # Edge between comment and code
-        G.add_edge(f"comment_{i}", f"code_{i}")
-
-        # Save graph with label in filename
-        label_str = "Useful" if str(label).lower() == "useful" else "NotUseful"
-        out_path = os.path.join(out_dir, f"graph_{i}_label{label_str}.gpickle")
-        nx.write_gpickle(G, out_path)
-
-    print(f"✅ Processed {len(df)} graphs into {out_dir}")
-
+        # Graph-level label
+        G.graph["y"] = int(label)
+        return G
+    except Exception as e:
+        print(f"⚠️ Skipping row {idx}: {e}")
+        return None
 
 def main():
-    input_file = "data/Code_Comment_Seed_Data.csv"
-    out_dir = "data/graphs"
-    build_graphs(input_file, out_dir)
+    ensure_dir(GRAPH_DIR)
+    df = pd.read_csv(RAW_DATA)
 
+    print(f"Processing {len(df)} examples...")
+    saved = 0
+    for idx, row in tqdm(df.iterrows(), total=len(df)):
+        code = str(row.get("code", ""))
+        comment = str(row.get("comment", ""))
+        label = int(row.get("label", 0))
+
+        G = build_graph_from_row(code, comment, label, idx)
+        if G is not None:
+            out_file = os.path.join(GRAPH_DIR, f"graph_{idx}.gpickle")
+            nx.write_gpickle(G, out_file)
+            saved += 1
+    print(f"✅ Saved {saved} graphs to {GRAPH_DIR}")
 
 if __name__ == "__main__":
     main()

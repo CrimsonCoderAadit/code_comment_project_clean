@@ -1,50 +1,63 @@
+"""
+Custom PyTorch Geometric dataset for loading graphs built by build_graph.py.
+Ensures all graphs have consistent node features and labels.
+"""
+
 import os
-import glob
 import torch
-from torch_geometric.data import InMemoryDataset, Data
-from torch_geometric.utils import from_networkx
 import networkx as nx
+from torch_geometric.data import Data, InMemoryDataset
+from torch_geometric.utils import from_networkx
+from tqdm import tqdm
+
+GRAPH_DIR = "data/graphs"
 
 class CodeCommentGraphDataset(InMemoryDataset):
     def __init__(self, root, transform=None, pre_transform=None):
+        self.root = root
         super().__init__(root, transform, pre_transform)
-        self.data, self.slices = torch.load(self.processed_paths[0])
+        self.data, self.slices = torch.load(self.processed_paths[0], weights_only=False)
 
     @property
     def raw_file_names(self):
-        return []  # we already have gpickles
+        return []  # not used
 
     @property
     def processed_file_names(self):
         return ["data.pt"]
 
     def download(self):
-        # Nothing to download
+        # No downloading step
         pass
 
     def process(self):
+        print(f"Processing graphs from: {GRAPH_DIR}")
+        files = [f for f in os.listdir(GRAPH_DIR) if f.endswith(".gpickle")]
+        print(f"Found {len(files)} graphs to process...")
+
         data_list = []
-        graph_files = glob.glob(os.path.join(self.root, "graphs", "*.gpickle"))
+        for f in tqdm(files):
+            try:
+                G = nx.read_gpickle(os.path.join(GRAPH_DIR, f))
+                data = from_networkx(G)
 
-        for gf in graph_files:
-            G = nx.read_gpickle(gf)
+                # Ensure x exists and is numeric
+                if not hasattr(data, "x") or data.x is None:
+                    continue
+                data.x = torch.tensor(data.x, dtype=torch.float)
 
-            # 🔑 Ensure all nodes have "type" and "text"
-            for n, d in G.nodes(data=True):
-                if "type" not in d:
-                    d["type"] = "unknown"
-                if "text" not in d:
-                    d["text"] = ""
+                # Ensure y exists
+                y = G.graph.get("y", None)
+                if y is None:
+                    continue
+                data.y = torch.tensor([int(y)], dtype=torch.long)
 
-            data = from_networkx(G)
+                data_list.append(data)
+            except Exception as e:
+                print(f"⚠️ Skipping {f}: {e}")
 
-            # Extract label from filename
-            if "Useful" in gf:
-                data.y = torch.tensor([1], dtype=torch.long)
-            else:
-                data.y = torch.tensor([0], dtype=torch.long)
+        print(f"✅ Processed {len(data_list)} valid graphs.")
+        if len(data_list) == 0:
+            raise RuntimeError("No valid graphs found! Check build_graph.py output.")
 
-            data_list.append(data)
-
-        data, slices = self.collate(data_list)
-        torch.save((data, slices), self.processed_paths[0])
+        torch.save(self.collate(data_list), self.processed_paths[0])
