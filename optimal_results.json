@@ -1,0 +1,29 @@
+{
+  "config": {
+    "model_type": "optimal",
+    "hidden_dim": 96,
+    "dropout": 0.4,
+    "batch_size": 32,
+    "learning_rate": 0.001,
+    "weight_decay": 0.0005,
+    "max_epochs": 50,
+    "patience": 12,
+    "use_class_weights": true,
+    "use_scheduler": true
+  },
+  "best_val_acc": 0.8192139737991266,
+  "test_acc": 0.7722513089005235,
+  "test_f1": 0.7755512346883499,
+  "total_epochs": 39,
+  "model_parameters": 51170,
+  "confusion_matrix": [
+    [
+      375,
+      61
+    ],
+    [
+      200,
+      510
+    ]
+  ]
+}

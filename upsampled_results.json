@@ -1,0 +1,20 @@
+{
+  "model_type": "upsampled_enhanced",
+  "features": "53D_selective",
+  "upsampling": "random_with_noise",
+  "final_test_acc": 0.808380619816674,
+  "final_test_f1": 0.8068049189101576,
+  "model_parameters": 9762,
+  "improvement_vs_enhanced": 0.004380619816673925,
+  "training_samples": 11302,
+  "confusion_matrix": [
+    [
+      626,
+      253
+    ],
+    [
+      186,
+      1226
+    ]
+  ]
+}

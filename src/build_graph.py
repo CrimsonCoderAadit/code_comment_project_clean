@@ -5,8 +5,8 @@ import torch
 from torch_geometric.data import Data
 from tqdm import tqdm
 import re
-from sklearn.feature_extraction.text import TfidfVectorizer
 import numpy as np
+from embeddings import AdvancedTokenEmbeddings
 
 # ------------------------------
 # Safe label conversion
@@ -23,174 +23,170 @@ def safe_label(label):
     if label_str in mapping:
         return mapping[label_str]
     try:
-        return int(label)  # fallback if numeric
+        return int(label)
     except Exception:
         return None
 
 # ------------------------------
-# Tokenization functions
+# Advanced tokenization
 # ------------------------------
-def tokenize_code(code_text):
-    """Tokenize code into meaningful tokens."""
+def advanced_tokenize_code(code_text):
+    """Enhanced code tokenization with better preprocessing."""
     if not isinstance(code_text, str):
         return []
     
-    # Remove extra whitespace and split by common delimiters
-    # This regex captures words, operators, punctuation as separate tokens
-    tokens = re.findall(r'\w+|[^\w\s]', code_text)
+    # Normalize whitespace
+    code_text = re.sub(r'\s+', ' ', code_text.strip())
     
-    # Filter out empty tokens and normalize
+    # Better tokenization for code
+    tokens = re.findall(r'\w+|[^\w\s]', code_text)
     tokens = [token.strip().lower() for token in tokens if token.strip()]
+    
     return tokens
 
-def tokenize_comment(comment_text):
-    """Tokenize comment into words."""
+def advanced_tokenize_comment(comment_text):
+    """Enhanced comment tokenization."""
     if not isinstance(comment_text, str):
         return []
     
-    # Simple word tokenization for comments
-    tokens = re.findall(r'\w+', comment_text.lower())
+    # Clean comment markers
+    comment_text = re.sub(r'[/*#]+', ' ', comment_text)
+    comment_text = re.sub(r'\s+', ' ', comment_text.strip())
+    
+    # Extract meaningful words
+    tokens = re.findall(r'\b[a-zA-Z][a-zA-Z0-9]*\b', comment_text.lower())
+    tokens = [token for token in tokens if len(token) >= 2]
+    
     return tokens
 
 # ------------------------------
-# Feature extraction
+# Enhanced graph builder with better structure
 # ------------------------------
-class TokenFeatureExtractor:
-    def __init__(self):
-        self.code_vectorizer = TfidfVectorizer(max_features=100, stop_words=None)
-        self.comment_vectorizer = TfidfVectorizer(max_features=50, stop_words='english')
-        self.is_fitted = False
-    
-    def fit(self, all_code_tokens, all_comment_tokens):
-        """Fit the vectorizers on all data."""
-        # Prepare text data for vectorizers
-        code_texts = [' '.join(tokens) for tokens in all_code_tokens]
-        comment_texts = [' '.join(tokens) for tokens in all_comment_tokens]
-        
-        # Fit vectorizers
-        self.code_vectorizer.fit(code_texts)
-        self.comment_vectorizer.fit(comment_texts)
-        self.is_fitted = True
-    
-    def get_token_features(self, token, token_type, code_tokens, comment_tokens):
-        """Get features for a single token."""
-        features = []
-        
-        # 1. Token type (0=code, 1=comment)
-        features.append(float(token_type))
-        
-        # 2. Token length
-        features.append(len(token))
-        
-        # 3. Is numeric
-        features.append(float(token.isdigit()))
-        
-        # 4. Is alphabetic
-        features.append(float(token.isalpha()))
-        
-        # 5. Has special characters
-        features.append(float(not token.isalnum()))
-        
-        # 6. TF-IDF features (simplified - just check if token appears in vocabulary)
-        if token_type == 0:  # code token
-            vocab = self.code_vectorizer.vocabulary_
-            features.append(float(token in vocab))
-        else:  # comment token
-            vocab = self.comment_vectorizer.vocabulary_
-            features.append(float(token in vocab))
-        
-        return features
-
-# ------------------------------
-# Improved Graph builder
-# ------------------------------
-def build_improved_graph(code, comment, label, feature_extractor):
+def build_enhanced_graph(code, comment, label, embedder):
     """
-    Build a more meaningful graph from code and comment.
-    Structure:
-    - Code tokens connected in sequence
-    - Comment tokens connected in sequence  
-    - Bridge connections between code and comment sections
+    Build enhanced graph with better structure and richer features.
+    
+    Graph structure:
+    1. Code tokens in sequence with skip connections
+    2. Comment tokens in sequence
+    3. Strategic bridges between code and comment
+    4. Attention-like connections for important tokens
     """
     if not isinstance(code, str) or not isinstance(comment, str):
         return None
     
-    # Tokenize
-    code_tokens = tokenize_code(code)
-    comment_tokens = tokenize_comment(comment)
+    # Tokenize with advanced methods
+    code_tokens = advanced_tokenize_code(code)
+    comment_tokens = advanced_tokenize_comment(comment)
     
     if len(code_tokens) == 0 and len(comment_tokens) == 0:
         return None
     
-    # Create graph
+    # Create graph with enhanced structure
     G = nx.Graph()
     node_features = []
     node_id = 0
     
-    # Add code nodes and edges
+    # Add code nodes with skip connections
     code_node_ids = []
     for i, token in enumerate(code_tokens):
-        features = feature_extractor.get_token_features(token, 0, code_tokens, comment_tokens)
+        # Get rich embeddings with context
+        features = embedder.get_token_embedding(token, 0, code_tokens)
         node_features.append(features)
-        G.add_node(node_id, token=token, type='code')
+        G.add_node(node_id, token=token, type='code', pos=i)
         code_node_ids.append(node_id)
         
-        # Connect to previous code node
+        # Sequential connections
         if i > 0:
             G.add_edge(node_id - 1, node_id)
         
+        # Skip connections for better information flow
+        if i > 1:
+            G.add_edge(node_id - 2, node_id, weight=0.5)  # Skip-1 connection
+        if i > 2:
+            G.add_edge(node_id - 3, node_id, weight=0.3)  # Skip-2 connection
+        
         node_id += 1
     
-    # Add comment nodes and edges
+    # Add comment nodes with skip connections
     comment_node_ids = []
     for i, token in enumerate(comment_tokens):
-        features = feature_extractor.get_token_features(token, 1, code_tokens, comment_tokens)
+        # Get rich embeddings with context
+        features = embedder.get_token_embedding(token, 1, comment_tokens)
         node_features.append(features)
-        G.add_node(node_id, token=token, type='comment')
+        G.add_node(node_id, token=token, type='comment', pos=i)
         comment_node_ids.append(node_id)
         
-        # Connect to previous comment node
+        # Sequential connections
         if i > 0:
             G.add_edge(node_id - 1, node_id)
         
+        # Skip connections
+        if i > 1:
+            G.add_edge(node_id - 2, node_id, weight=0.5)
+        
         node_id += 1
     
-    # Add bridge connections between code and comment sections
+    # Enhanced bridge connections
     if code_node_ids and comment_node_ids:
-        # Connect last code node to first comment node
-        G.add_edge(code_node_ids[-1], comment_node_ids[0])
+        # Multiple bridge connections for better information flow
         
-        # Add a few more strategic connections if both sections are long enough
-        if len(code_node_ids) > 2 and len(comment_node_ids) > 2:
-            # Connect middle nodes
-            mid_code = code_node_ids[len(code_node_ids)//2]
-            mid_comment = comment_node_ids[len(comment_node_ids)//2]
-            G.add_edge(mid_code, mid_comment)
+        # 1. Connect start and end points
+        G.add_edge(code_node_ids[0], comment_node_ids[0], weight=0.8)  # Start-start
+        G.add_edge(code_node_ids[-1], comment_node_ids[-1], weight=0.8)  # End-end
+        
+        # 2. Connect middle points if sequences are long enough
+        if len(code_node_ids) >= 3 and len(comment_node_ids) >= 3:
+            mid_code = len(code_node_ids) // 2
+            mid_comment = len(comment_node_ids) // 2
+            G.add_edge(code_node_ids[mid_code], comment_node_ids[mid_comment], weight=0.7)
+        
+        # 3. Cross connections for semantic similarity (simplified)
+        # Connect a few strategic pairs
+        n_connections = min(3, len(code_node_ids), len(comment_node_ids))
+        for i in range(n_connections):
+            code_idx = i * len(code_node_ids) // n_connections
+            comment_idx = i * len(comment_node_ids) // n_connections
+            if code_idx < len(code_node_ids) and comment_idx < len(comment_node_ids):
+                G.add_edge(code_node_ids[code_idx], comment_node_ids[comment_idx], weight=0.6)
+    
+    # Add self-loops for important tokens (like attention mechanism)
+    all_node_ids = code_node_ids + comment_node_ids
+    for node_id in all_node_ids:
+        G.add_edge(node_id, node_id, weight=1.0)  # Self-loop
     
     # Convert to PyTorch Geometric format
     if G.number_of_nodes() == 0:
         return None
     
-    # Node features
     if not node_features:
         return None
     
-    x = torch.tensor(node_features, dtype=torch.float)
+    # Stack features
+    try:
+        x = torch.tensor(np.vstack(node_features), dtype=torch.float)
+    except Exception as e:
+        print(f"Error stacking features: {e}")
+        return None
     
-    # Edge index
-    if G.number_of_edges() == 0:
-        # If no edges, create a self-loop for the single node
-        if G.number_of_nodes() == 1:
-            edge_index = torch.tensor([[0], [0]], dtype=torch.long)
-        else:
-            return None
+    # Create edge index and edge weights
+    edges = list(G.edges(data=True))
+    if len(edges) == 0:
+        # Create self-loops if no edges
+        edge_index = torch.tensor([[i, i] for i in range(G.number_of_nodes())]).t().contiguous()
+        edge_weight = torch.ones(G.number_of_nodes())
     else:
-        edge_index = torch.tensor(list(G.edges)).t().contiguous()
+        edge_list = [(u, v) for u, v, _ in edges]
+        edge_weights = [data.get('weight', 1.0) for _, _, data in edges]
+        
+        edge_index = torch.tensor(edge_list, dtype=torch.long).t().contiguous()
+        edge_weight = torch.tensor(edge_weights, dtype=torch.float)
     
-    # Create data object
+    # Create data object with edge weights
     data = Data(
         x=x,
         edge_index=edge_index,
+        edge_attr=edge_weight.unsqueeze(-1),  # Add edge features
         y=torch.tensor([label], dtype=torch.long),
         num_nodes=G.number_of_nodes()
     )
@@ -198,60 +194,62 @@ def build_improved_graph(code, comment, label, feature_extractor):
     return data
 
 # ------------------------------
-# Main function with two-pass approach
+# Main function with enhanced pipeline
 # ------------------------------
 def main():
     input_csv = "data/raw/data.csv"
     output_dir = "data/graphs"
+    embeddings_path = "data/simplified_embeddings.pkl"
+    
     os.makedirs(output_dir, exist_ok=True)
     
     print(f"📂 Loading dataset: {input_csv}")
     df = pd.read_csv(input_csv)
     
-    # Rename columns consistently
+    # Rename columns
     df = df.rename(columns={
         "Comments": "comment",
-        "Surrounding Code Context": "code",
+        "Surrounding Code Context": "code", 
         "Class": "label"
     })
     
     print(f"📊 Total rows: {len(df)}")
     
-    # First pass: collect all tokens to fit feature extractors
-    print("🔍 First pass: analyzing tokens for feature extraction...")
-    all_code_tokens = []
-    all_comment_tokens = []
-    valid_rows = []
+    # Load or create advanced embeddings
+    if os.path.exists(embeddings_path):
+        print(f"📂 Loading existing embeddings from {embeddings_path}")
+        embedder = AdvancedTokenEmbeddings()
+        embedder.load(embeddings_path)
+    else:
+        print("🚀 Creating new advanced embeddings...")
+        from embeddings import create_advanced_embeddings
+        embedder = create_advanced_embeddings(input_csv, embeddings_path)
     
-    for i, row in tqdm(df.iterrows(), total=len(df), desc="Analyzing"):
+    print(f"🎯 Feature dimension: {embedder.get_feature_dim()}")
+    
+    # Process data
+    valid_rows = []
+    for i, row in tqdm(df.iterrows(), total=len(df), desc="Preprocessing"):
         label = safe_label(row["label"])
         if label is None:
             continue
             
-        code_tokens = tokenize_code(row["code"])
-        comment_tokens = tokenize_comment(row["comment"])
+        code_tokens = advanced_tokenize_code(row["code"])
+        comment_tokens = advanced_tokenize_comment(row["comment"])
         
         if len(code_tokens) == 0 and len(comment_tokens) == 0:
             continue
             
-        all_code_tokens.append(code_tokens)
-        all_comment_tokens.append(comment_tokens)
-        valid_rows.append((i, row, label, code_tokens, comment_tokens))
+        valid_rows.append((i, row, label))
     
-    print(f"📈 Found {len(valid_rows)} valid samples")
+    print(f"📈 Processing {len(valid_rows)} valid samples...")
     
-    # Fit feature extractors
-    print("🧠 Training feature extractors...")
-    feature_extractor = TokenFeatureExtractor()
-    feature_extractor.fit(all_code_tokens, all_comment_tokens)
-    
-    # Second pass: build graphs
-    print("🏗️  Second pass: building graphs...")
+    # Build enhanced graphs
     saved = 0
     skipped = 0
     
-    for i, row, label, code_tokens, comment_tokens in tqdm(valid_rows, desc="Building graphs"):
-        graph = build_improved_graph(row["code"], row["comment"], label, feature_extractor)
+    for i, row, label in tqdm(valid_rows, desc="Building enhanced graphs"):
+        graph = build_enhanced_graph(row["code"], row["comment"], label, embedder)
         
         if graph is None:
             skipped += 1
@@ -261,15 +259,11 @@ def main():
         torch.save(graph, os.path.join(output_dir, f"graph_{i}.pt"))
         saved += 1
     
-    print(f"\n✅ Finished! Saved {saved} graphs to {output_dir}")
-    print(f"⚠️ Skipped: {skipped} rows out of {len(df)}")
-    
-    # Print some statistics
-    if saved > 0:
-        print(f"\n📊 Statistics:")
-        print(f"  - Average code vocabulary size: {len(feature_extractor.code_vectorizer.vocabulary_)}")
-        print(f"  - Average comment vocabulary size: {len(feature_extractor.comment_vectorizer.vocabulary_)}")
-        print(f"  - Node feature dimensions: {len(all_code_tokens[0]) if all_code_tokens and all_code_tokens[0] else 'N/A'}")
+    print(f"\n✅ Enhanced graph building complete!")
+    print(f"📊 Saved: {saved} graphs")
+    print(f"⚠️  Skipped: {skipped} graphs") 
+    print(f"🎯 Feature dimensions: {embedder.get_feature_dim()}")
+    print(f"💾 Embeddings saved at: {embeddings_path}")
 
 if __name__ == "__main__":
     main()
