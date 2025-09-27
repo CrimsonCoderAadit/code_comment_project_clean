@@ -1,0 +1,17 @@
+Comments,Surrounding Code Context,Class
+// Thread-safe singleton implementation with double-checked locking,static Instance* getInstance() { if (instance == NULL) { pthread_mutex_lock(&mutex); if (instance == NULL) { instance = malloc(sizeof(Instance)); } pthread_mutex_unlock(&mutex); } return instance; },Useful
+// This function prints hello,"void print_hello() { printf(""Hello, World!\n""); }",Not Useful
+// Swap two integers using XOR operation to avoid temporary variable,"void swap_xor(int *a, int *b) { if (a != b) { *a ^= *b; *b ^= *a; *a ^= *b; } }",Useful
+// Dynamic memory allocation for integer array with error checking,"int* create_array(int size) { int *arr = malloc(size * sizeof(int)); if (arr == NULL) { fprintf(stderr, ""Memory allocation failed\n""); exit(1); } return arr; }",Useful
+// Call the function,"result = calculate_total(values, count);",Not Useful
+// Binary search implementation - returns index of target or -1 if not found,"int binary_search(int arr[], int n, int target) { int left = 0, right = n - 1; while (left <= right) { int mid = left + (right - left) / 2; if (arr[mid] == target) return mid; if (arr[mid] < target) left = mid + 1; else right = mid - 1; } return -1; }",Useful
+// Increment i,"for (int i = 0; i < n; i++) { printf(""%d "", arr[i]); }",Not Useful
+// Close the file,fclose(file);,Not Useful
+// Quick sort partition function - places pivot in correct position,"int partition(int arr[], int low, int high) { int pivot = arr[high]; int i = low - 1; for (int j = low; j < high; j++) { if (arr[j] < pivot) { i++; swap(&arr[i], &arr[j]); } } swap(&arr[i + 1], &arr[high]); return i + 1; }",Useful
+// Floyd's cycle detection algorithm for linked list loop detection,"bool has_cycle(struct Node* head) { struct Node *slow = head, *fast = head; while (fast && fast->next) { slow = slow->next; fast = fast->next->next; if (slow == fast) return true; } return false; }",Useful
+// Loop through the array,for (int j = 0; j < length; j++) { sum += numbers[j]; },Not Useful
+// Calculate CRC32 checksum for data integrity verification,"uint32_t crc32(const uint8_t *data, size_t length) { uint32_t crc = 0xFFFFFFFF; for (size_t i = 0; i < length; i++) { crc ^= data[i]; for (int j = 0; j < 8; j++) { crc = (crc >> 1) ^ ((crc & 1) ? 0xEDB88320 : 0); } } return ~crc; }",Useful
+// Check if x equals 0,"if (x == 0) { printf(""Zero\n""); } else { printf(""Non-zero\n""); }",Not Useful
+// Set x to 1,int x = 1;,Not Useful
+// Return the sum,"int add(int a, int b) { return a + b; }",Not Useful
+// Calculate factorial recursively with base case handling,int factorial(int n) { if (n <= 1) return 1; return n * factorial(n - 1); },Useful

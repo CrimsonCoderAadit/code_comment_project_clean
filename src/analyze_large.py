@@ -15,19 +15,19 @@ def load_trained_model(model_path, input_dim=53, hidden_dim=64, num_classes=2):
     print(f"✅ Loaded trained model from {model_path}")
     return model
 
-def evaluate_on_synthetic_data(model, synthetic_graphs_dir):
-    """Evaluate trained model on synthetic test data"""
+def evaluate_on_large_synthetic_data(model, large_synthetic_graphs_dir):
+    """Evaluate trained model on large synthetic test data"""
     
-    print("📊 Loading synthetic test graphs...")
+    print("📊 Loading large synthetic test graphs...")
     
-    # Load synthetic graph files directly with weights_only=False
-    graph_files = glob.glob(os.path.join(synthetic_graphs_dir, "synthetic_graph_*.pt"))
+    # Load large synthetic graph files directly with weights_only=False
+    graph_files = glob.glob(os.path.join(large_synthetic_graphs_dir, "large_synthetic_graph_*.pt"))
     
     if not graph_files:
-        print(f"❌ No synthetic graphs found in {synthetic_graphs_dir}")
+        print(f"❌ No large synthetic graphs found in {large_synthetic_graphs_dir}")
         return [], []
     
-    print(f"📁 Found {len(graph_files)} synthetic graph files")
+    print(f"📁 Found {len(graph_files)} large synthetic graph files")
     
     # Load all synthetic graphs with proper torch.load settings
     synthetic_graphs = []
@@ -46,13 +46,13 @@ def evaluate_on_synthetic_data(model, synthetic_graphs_dir):
         print("❌ No graphs could be loaded successfully!")
         return [], []
     
-    print(f"✅ Successfully loaded {len(synthetic_graphs)} graphs")
+    print(f"✅ Successfully loaded {len(synthetic_graphs)} large synthetic graphs")
     if failed_loads > 0:
         print(f"⚠️ Failed to load {failed_loads} graphs")
     
     test_loader = DataLoader(synthetic_graphs, batch_size=32, shuffle=False)
     
-    print(f"📝 Synthetic dataset size: {len(synthetic_graphs)}")
+    print(f"📝 Large synthetic dataset size: {len(synthetic_graphs)}")
     
     # Run inference
     all_predictions = []
@@ -61,7 +61,7 @@ def evaluate_on_synthetic_data(model, synthetic_graphs_dir):
     device = torch.device('cpu')  # Using CPU for inference
     model.to(device)
     
-    print("🔍 Running inference on synthetic data...")
+    print("🔍 Running inference on large synthetic data...")
     
     with torch.no_grad():
         for batch in test_loader:
@@ -74,8 +74,8 @@ def evaluate_on_synthetic_data(model, synthetic_graphs_dir):
     
     return all_predictions, all_labels
 
-def analyze_performance(predictions, true_labels):
-    """Analyze model performance on synthetic data"""
+def analyze_large_performance(predictions, true_labels):
+    """Analyze model performance on large synthetic data"""
     
     if len(predictions) == 0 or len(true_labels) == 0:
         print("❌ No predictions or labels to analyze!")
@@ -84,10 +84,10 @@ def analyze_performance(predictions, true_labels):
     # Calculate metrics
     accuracy = accuracy_score(true_labels, predictions)
     
-    print("\n" + "="*50)
-    print("🎯 SYNTHETIC DATA EVALUATION RESULTS")
-    print("="*50)
-    print(f"🎯 Test Accuracy on Synthetic Data: {accuracy:.4f} ({accuracy*100:.2f}%)")
+    print("\n" + "="*60)
+    print("🎯 LARGE SYNTHETIC DATA EVALUATION RESULTS (100 samples)")
+    print("="*60)
+    print(f"🎯 Test Accuracy on Large Synthetic Data: {accuracy:.4f} ({accuracy*100:.2f}%)")
     
     # Check if we have both classes in the results
     unique_labels = set(true_labels)
@@ -148,37 +148,51 @@ def analyze_performance(predictions, true_labels):
     
     return accuracy
 
-def compare_with_original_performance(synthetic_accuracy):
-    """Compare synthetic data performance with original test performance"""
-    print("\n" + "="*50)
-    print("📊 PERFORMANCE COMPARISON")
-    print("="*50)
-    print("🏆 Original Test Set Accuracy: 80.8%")
-    print(f"🤖 Synthetic Test Set Accuracy: {synthetic_accuracy*100:.1f}%")
+def compare_all_performance(large_synthetic_accuracy):
+    """Compare all test performances"""
+    print("\n" + "="*60)
+    print("📊 COMPREHENSIVE PERFORMANCE COMPARISON")
+    print("="*60)
+    print("🏆 Original Test Set Accuracy (Real Data):     80.8%")
+    print("🤖 Small Synthetic Test Set (16 samples):     62.5%")
+    print(f"🚀 Large Synthetic Test Set (100 samples):    {large_synthetic_accuracy*100:.1f}%")
     
-    difference = synthetic_accuracy - 0.808
+    # Compare with small synthetic test
+    small_synthetic_acc = 0.625
+    difference_from_small = large_synthetic_accuracy - small_synthetic_acc
+    difference_from_original = large_synthetic_accuracy - 0.808
+    
     print(f"\n💡 Analysis:")
-    print(f"Difference: {difference*100:+.1f} percentage points")
+    print(f"Difference from original: {difference_from_original*100:+.1f} percentage points")
+    print(f"Difference from small synthetic: {difference_from_small*100:+.1f} percentage points")
     
-    if abs(difference) < 0.05:  # Within 5%
-        print("✅ Model generalizes well - similar performance on synthetic data")
-    elif difference < -0.05:
-        print("⚠️ Model performs worse on synthetic data - may indicate:")
-        print("   - Overfitting to training data distribution")
-        print("   - Synthetic data is more challenging")
-        print("   - Domain gap between real and synthetic code")
+    if abs(difference_from_original) < 0.05:  # Within 5%
+        print("✅ Model generalizes excellently - similar performance across data types")
+    elif difference_from_original < -0.1:
+        print("⚠️ Significant performance drop on synthetic data indicates:")
+        print("   - Model overfits to training data patterns")
+        print("   - Synthetic data exposes model weaknesses")
+        print("   - Need for better regularization or data augmentation")
+    elif difference_from_original < -0.05:
+        print("⚠️ Moderate performance drop suggests limited generalization")
     else:
         print("📈 Model performs better on synthetic data - may indicate:")
-        print("   - Synthetic data is easier/more structured")
-        print("   - Synthetic examples are clearer cases")
+        print("   - Synthetic examples are clearer/more structured")
+        print("   - LLM generates prototypical examples")
+    
+    # Stability analysis
+    if abs(difference_from_small) < 0.05:
+        print(f"\n🔒 Consistent performance across synthetic data sizes (stable)")
+    else:
+        print(f"\n📊 Performance varies with dataset size - may indicate sampling effects")
 
 def main():
-    print("🚀 Starting Model Analysis on Synthetic Data")
-    print("="*50)
+    print("🚀 Starting Comprehensive Model Analysis on Large Synthetic Data (100 samples)")
+    print("="*80)
     
     # Paths
     model_path = "best_upsampled_model.pth"  # Your trained model
-    synthetic_graphs_dir = "data/synthetic_graphs"  # Synthetic graph directory
+    large_synthetic_graphs_dir = "data/large_synthetic_graphs"  # Large synthetic graph directory
     
     # Check if files exist
     if not os.path.exists(model_path):
@@ -186,44 +200,52 @@ def main():
         print("💡 Make sure you have trained your model first!")
         return
     
-    if not os.path.exists(synthetic_graphs_dir):
-        print(f"❌ Synthetic graphs directory not found: {synthetic_graphs_dir}")
-        print("💡 Run build_synthetic_graphs.py first to create synthetic graphs!")
+    if not os.path.exists(large_synthetic_graphs_dir):
+        print(f"❌ Large synthetic graphs directory not found: {large_synthetic_graphs_dir}")
+        print("💡 Run build_large_synthetic_graphs.py first to create large synthetic graphs!")
         return
     
     try:
         # Load trained model
         model = load_trained_model(model_path)
         
-        # Evaluate on synthetic data  
-        predictions, true_labels = evaluate_on_synthetic_data(model, synthetic_graphs_dir)
+        # Evaluate on large synthetic data  
+        predictions, true_labels = evaluate_on_large_synthetic_data(model, large_synthetic_graphs_dir)
         
         if len(predictions) == 0:
             print("❌ No predictions generated - check graph loading issues")
             return
         
         # Analyze performance
-        synthetic_accuracy = analyze_performance(predictions, true_labels)
+        large_synthetic_accuracy = analyze_large_performance(predictions, true_labels)
         
-        # Compare with original performance
-        compare_with_original_performance(synthetic_accuracy)
+        # Compare with all previous performance
+        compare_all_performance(large_synthetic_accuracy)
         
-        print("\n✨ Analysis complete!")
+        print("\n✨ Comprehensive analysis complete!")
         
         # Save results
         results = {
-            'synthetic_accuracy': float(synthetic_accuracy),
+            'large_synthetic_accuracy': float(large_synthetic_accuracy),
             'original_accuracy': 0.808,
-            'num_synthetic_samples': len(predictions),
+            'small_synthetic_accuracy': 0.625,
+            'num_large_synthetic_samples': len(predictions),
             'predictions': predictions,
-            'true_labels': true_labels
+            'true_labels': true_labels,
+            'balanced_dataset': True,
+            'sample_size': 100
         }
         
         import json
-        with open('synthetic_evaluation_results.json', 'w') as f:
+        with open('large_synthetic_evaluation_results.json', 'w') as f:
             json.dump(results, f, indent=2, default=str)
         
-        print(f"💾 Results saved to: synthetic_evaluation_results.json")
+        print(f"💾 Results saved to: large_synthetic_evaluation_results.json")
+        
+        # Statistical significance note
+        print(f"\n📈 Statistical Note:")
+        print(f"With 100 balanced samples, this evaluation provides more reliable")
+        print(f"statistical significance than the 16-sample test.")
         
     except Exception as e:
         print(f"❌ Error during analysis: {str(e)}")
